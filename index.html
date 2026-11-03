@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="번호만 넣으면 짝꿍과 자리를 랜덤으로 뽑아 주는 교실 자리 배치 프로그램">
+  <title>랜덤 자리 뽑기</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎲</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --panel: rgba(255, 255, 255, 0.88);
+      --line: #e5e7eb;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --cyan: #0891b2;
+      --violet: #7c3aed;
+      --pink: #db2777;
+      --amber: #f59e0b;
+      --red: #dc2626;
+      --seat: clamp(52px, 6.4vw, 86px);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Jua', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      overflow-x: hidden;
+    }
+
+    /* 배경: 옅은 격자 + 파스텔 빛 */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(124, 58, 237, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124, 58, 237, 0.06) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
+      -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
+      pointer-events: none;
+      z-index: -1;
+    }
+    .blob {
+      position: fixed;
+      width: 480px;
+      height: 480px;
+      border-radius: 50%;
+      filter: blur(110px);
+      opacity: 0.55;
+      pointer-events: none;
+      z-index: -2;
+      animation: float 14s ease-in-out infinite;
+    }
+    .blob.b1 { background: #c4b5fd; top: -160px; left: -120px; }
+    .blob.b2 { background: #a5f3fc; bottom: -180px; right: -120px; animation-delay: -5s; }
+    .blob.b3 { background: #fbcfe8; top: 40%; left: 55%; width: 320px; height: 320px; animation-delay: -9s; }
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0); }
+      50% { transform: translate(60px, 40px); }
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+    .hidden { display: none !important; }
+    .text-center { text-align: center; }
+
+    /* 사운드 버튼 */
+    .sound-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-size: 22px;
+      cursor: pointer;
+      z-index: 50;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      transition: transform 0.2s;
+    }
+    .sound-btn:hover { transform: scale(1.1); }
+
+    /* 헤더 */
+    .header { text-align: center; margin: 12px 0 32px; }
+    .eyebrow {
+      display: inline-block;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px;
+      letter-spacing: 0.35em;
+      color: var(--violet);
+      background: #fff;
+      border: 1px solid #ddd6fe;
+      padding: 6px 14px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+    }
+    .title {
+      font-family: 'Jua', sans-serif;
+      font-weight: 400;
+      font-size: clamp(42px, 6.5vw, 68px);
+      line-height: 1.2;
+      letter-spacing: 0.02em;
+      background: linear-gradient(90deg, #0891b2, #7c3aed 50%, #db2777);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .subtitle { margin-top: 8px; font-size: 20px; color: var(--muted); }
+
+    /* 카드 */
+    .card {
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid #ede9fe;
+      border-radius: 28px;
+      padding: 32px;
+      box-shadow: 0 24px 50px -24px rgba(124, 58, 237, 0.3);
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+      font-size: 26px;
+    }
+
+    /* 토글 */
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 22px;
+      border-radius: 18px;
+      border: 1px solid #ddd6fe;
+      background: linear-gradient(90deg, #f5f3ff, #fdf2f8);
+      margin-bottom: 24px;
+    }
+    .toggle-label { font-size: 22px; }
+    .toggle-switch {
+      position: relative;
+      width: 76px;
+      height: 38px;
+      background: #d1d5db;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .toggle-switch.active { background: linear-gradient(90deg, #22d3ee, #8b5cf6); }
+    .toggle-circle {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background: #fff;
+      border-radius: 50%;
+      top: 4px;
+      left: 4px;
+      transition: all 0.3s;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+    .toggle-switch.active .toggle-circle { left: 42px; }
+
+    /* 입력 */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .input-group { display: flex; flex-direction: column; }
+    .input-label { font-size: 17px; color: var(--violet); margin-bottom: 10px; }
+
+    input[type="number"], input[type="text"] {
+      width: 100%;
+      padding: 14px 18px;
+      background: #fff;
+      border: 2px solid #e0e7ff;
+      border-radius: 14px;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      font-family: 'Orbitron', 'Jua', sans-serif;
+      transition: all 0.2s;
+    }
+    input[type="number"]:focus, input[type="text"]:focus {
+      outline: none;
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
+    }
+    input::placeholder { color: #9ca3af; font-family: 'Jua', sans-serif; font-size: 17px; font-weight: 400; }
+
+    .tags-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px 6px 14px;
+      background: #fdf2f8;
+      border: 1px solid #f9a8d4;
+      color: #be185d;
+      border-radius: 999px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 15px;
+    }
+    .tag button {
+      background: rgba(190, 24, 93, 0.1);
+      border: none;
+      color: #be185d;
+      cursor: pointer;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tag button:hover { background: rgba(190, 24, 93, 0.2); }
+
+    .alert {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      border-radius: 14px;
+      margin-bottom: 20px;
+      color: #b91c1c;
+      font-size: 18px;
+    }
+
+    .option-card {
+      border: 1px solid #fcd34d;
+      background: #fffbeb;
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .option-header { font-size: 20px; color: #b45309; margin-bottom: 6px; }
+    .option-text { color: #92400e; margin-bottom: 14px; }
+
+    .button-group { display: flex; flex-wrap: wrap; gap: 10px; }
+    .btn {
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-family: 'Jua', sans-serif;
+      font-size: 17px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--line); }
+    .btn-secondary:hover { border-color: var(--amber); }
+    .btn-secondary.active {
+      background: var(--amber);
+      color: #fff;
+      border-color: var(--amber);
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+    }
+
+    .fixed-position-card {
+      border: 1px solid #ddd6fe;
+      background: #faf5ff;
+      border-radius: 18px;
+      padding: 20px;
+    }
+    .fixed-position-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .fixed-position-title { font-size: 20px; color: #6d28d9; }
+    .btn-add {
+      padding: 8px 16px;
+      background: linear-gradient(90deg, #8b5cf6, #ec4899);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Jua', sans-serif;
+      font-size: 16px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .btn-add:hover { transform: scale(1.05); }
+    .fixed-position-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+    .fixed-position-row input { flex: 1; padding: 10px 14px; font-size: 18px; border-color: #ddd6fe; }
+    .arrow { color: var(--violet); font-size: 22px; }
+    .btn-delete {
+      padding: 10px 14px;
+      background: #fef2f2;
+      color: var(--red);
+      border: 1px solid #fecaca;
+      border-radius: 12px;
+      font-family: 'Jua', sans-serif;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .btn-delete:hover { background: #fee2e2; }
+    .note { font-size: 14px; color: var(--muted); margin-top: 8px; }
+
+    /* 시작 버튼 */
+    .btn-generate {
+      width: 100%;
+      padding: 22px;
+      margin-top: 28px;
+      border: none;
+      border-radius: 20px;
+      font-family: 'Jua', sans-serif;
+      font-size: 32px;
+      color: #fff;
+      cursor: pointer;
+      background: linear-gradient(90deg, #22d3ee, #8b5cf6, #ec4899, #8b5cf6, #22d3ee);
+      background-size: 300% 100%;
+      animation: shimmer 4s linear infinite, pulse 1.8s ease-in-out infinite;
+      transition: transform 0.2s;
+    }
+    .btn-generate:hover { transform: scale(1.03); }
+    .btn-generate:active { transform: scale(0.97); }
+    .btn-generate:disabled {
+      background: #e5e7eb;
+      color: #9ca3af;
+      animation: none;
+      cursor: not-allowed;
+      transform: none;
+    }
+    @keyframes shimmer { to { background-position: 300% 0; } }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 8px 20px rgba(139, 92, 246, 0.3); }
+      50% { box-shadow: 0 10px 36px rgba(236, 72, 153, 0.45); }
+    }
+
+    /* 카운트다운 */
+    .countdown-screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background: radial-gradient(circle at center, rgba(221, 214, 254, 0.9), rgba(255, 255, 255, 0.97) 60%);
+    }
+    .countdown-screen.active { display: flex; }
+    .countdown-num {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: clamp(140px, 28vw, 300px);
+      background: linear-gradient(135deg, #06b6d4, #8b5cf6 55%, #ec4899);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .countdown-num.pop { animation: countPop 0.7s cubic-bezier(0.2, 1.4, 0.4, 1); }
+    @keyframes countPop {
+      0% { transform: scale(2.6); opacity: 0; }
+      60% { transform: scale(0.95); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+    .countdown-sub { font-size: 28px; color: var(--muted); margin-top: 8px; }
+
+    /* 결과 화면 */
+    .result-screen { display: none; }
+    .result-screen.active { display: block; }
+
+    .reveal-status {
+      text-align: center;
+      font-family: 'Jua', sans-serif;
+      font-size: clamp(30px, 5vw, 48px);
+      color: var(--text);
+      margin: 8px 0 24px;
+      min-height: 1.3em;
+    }
+    .reveal-status.hot { color: #d97706; animation: heartbeat 0.6s infinite; }
+    @keyframes heartbeat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+
+    .desk-label {
+      width: min(420px, 80%);
+      margin: 0 auto 28px;
+      padding: 14px;
+      text-align: center;
+      font-size: 24px;
+      color: #155e75;
+      border-radius: 14px;
+      background: linear-gradient(90deg, #ecfeff, #ede9fe, #ecfeff);
+      border: 1px solid #a5f3fc;
+      box-shadow: 0 6px 16px rgba(8, 145, 178, 0.12);
+    }
+
+    .seating-card {
+      background: var(--panel);
+      border: 1px solid #ede9fe;
+      border-radius: 28px;
+      padding: 28px 20px;
+      overflow-x: auto;
+      box-shadow: 0 24px 50px -24px rgba(124, 58, 237, 0.3);
+    }
+    .seating-chart { display: flex; flex-direction: column; gap: 16px; align-items: center; }
+    .seating-row { display: flex; gap: clamp(14px, 2.6vw, 34px); align-items: center; }
+    .row-number { width: 48px; text-align: right; font-size: 18px; color: var(--muted); }
+    .section {
+      display: flex;
+      gap: 6px;
+      padding: 7px;
+      border-radius: 18px;
+      background: #f8fafc;
+      border: 1px solid #eef2ff;
+    }
+
+    .seat {
+      position: relative;
+      width: var(--seat);
+      height: var(--seat);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: calc(var(--seat) * 0.38);
+      transition: transform 0.2s;
+    }
+    .seat.spinning {
+      background: #eef2ff;
+      color: #818cf8;
+      border: 2px solid #c7d2fe;
+      animation: spinGlow 0.4s ease-in-out infinite alternate;
+    }
+    @keyframes spinGlow {
+      from { border-color: #c7d2fe; box-shadow: none; }
+      to { border-color: #8b5cf6; box-shadow: 0 0 12px rgba(139, 92, 246, 0.35); }
+    }
+    .seat.revealed {
+      background: linear-gradient(135deg, #06b6d4, #8b5cf6 60%, #ec4899);
+      color: #fff;
+      box-shadow: 0 6px 16px rgba(139, 92, 246, 0.35);
+      animation: popIn 0.55s cubic-bezier(0.2, 1.6, 0.4, 1);
+    }
+    .seat.revealed:hover { transform: scale(1.12); }
+    @keyframes popIn {
+      0% { transform: scale(1.7); filter: brightness(1.6); }
+      100% { transform: scale(1); filter: brightness(1); }
+    }
+    .seat.empty { border: 2px dashed #e5e7eb; }
+    .seat.solo.revealed {
+      background: linear-gradient(135deg, #f59e0b, #fbbf24);
+      color: #fff;
+      box-shadow: 0 6px 18px rgba(245, 158, 11, 0.45);
+    }
+    .seat.solo.revealed::after {
+      content: 'SOLO';
+      position: absolute;
+      top: -10px;
+      right: -12px;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: var(--pink);
+      color: #fff;
+    }
+
+    .stats {
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.5s;
+    }
+    .stats.show { opacity: 1; transform: none; }
+    .stat-item {
+      text-align: center;
+      padding: 12px 24px;
+      border-radius: 16px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+    }
+    .stat-label { color: var(--muted); font-size: 15px; }
+    .stat-value { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 32px; color: var(--text); }
+    .stat-unit { font-family: 'Jua', sans-serif; font-size: 18px; color: var(--violet); margin-left: 4px; }
+
+    .result-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 28px; }
+    .btn-big {
+      padding: 16px 30px;
+      border-radius: 18px;
+      font-family: 'Jua', sans-serif;
+      font-size: 22px;
+      cursor: pointer;
+      transition: transform 0.2s;
+      border: none;
+    }
+    .btn-big:hover { transform: scale(1.05); }
+    .btn-reroll {
+      color: #fff;
+      background: linear-gradient(90deg, #8b5cf6, #ec4899);
+      box-shadow: 0 8px 20px rgba(236, 72, 153, 0.35);
+    }
+    .btn-back, .btn-skip { color: var(--text); background: #fff; border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); }
+    .btn-skip { font-size: 18px; padding: 10px 20px; }
+
+    #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
+
+    @media (max-width: 640px) {
+      body { padding: 14px; }
+      .card { padding: 20px; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .row-number { width: 32px; font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="blob b1"></div>
+  <div class="blob b2"></div>
+  <div class="blob b3"></div>
+  <canvas id="confetti"></canvas>
+  <button id="soundBtn" class="sound-btn" onclick="toggleSound()" title="소리 켜기/끄기">🔊</button>
+
+  <!-- 설정 화면 -->
+  <div id="setupScreen" class="container">
+    <div class="header">
+      <div class="eyebrow">RANDOM SEAT GACHA</div>
+      <h1 class="title">랜덤 자리 뽑기</h1>
+      <p class="subtitle">오늘 내 짝꿍은 누구? 🎲</p>
+    </div>
+
+    <div class="card">
+      <div class="section-title">⚙️ 배치 설정</div>
+
+      <div class="toggle-container">
+        <div class="toggle-label">👫 짝꿍으로 앉기</div>
+        <div id="pairToggle" class="toggle-switch active" onclick="togglePairs()">
+          <div class="toggle-circle"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="input-group">
+          <label class="input-label">총 인원 수</label>
+          <input type="number" id="totalStudents" value="30" min="1">
+        </div>
+        <div class="input-group">
+          <label class="input-label">제외할 번호</label>
+          <input type="number" id="excludeInput" placeholder="번호 입력 후 Enter ⏎" min="1">
+          <div id="excludedTags" class="tags-container"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="input-group">
+          <label class="input-label">분단 수</label>
+          <input type="number" id="numSections" value="3" min="1">
+        </div>
+        <div class="input-group">
+          <label class="input-label">분단별 줄 수</label>
+          <input type="number" id="rowsPerSection" value="5" min="1">
+        </div>
+      </div>
+
+      <div id="seatAlert" class="alert hidden">
+        <span>🚨</span>
+        <p id="alertText"></p>
+      </div>
+
+      <div id="oddStudentOption" class="option-card hidden">
+        <div class="option-header">👑 혼자 앉는 학생 배치</div>
+        <p class="option-text">학생 수가 홀수입니다. 한 명은 맨 뒷줄에 혼자 앉습니다.</p>
+        <div id="singleSeatButtons" class="button-group"></div>
+      </div>
+
+      <div class="fixed-position-card">
+        <div class="fixed-position-header">
+          <div class="fixed-position-title">📌 특정 번호 고정 배치</div>
+          <button class="btn-add" onclick="addFixedPosition()">+ 추가</button>
+        </div>
+        <div id="fixedPositionsList"></div>
+        <p class="note">* 교탁 기준 맨 앞줄이 1번째 줄입니다 (지정한 줄 안에서 분단·자리는 랜덤)</p>
+      </div>
+
+      <button id="generateBtn" class="btn-generate" onclick="startGeneration()">🎲 자리 뽑기 START!</button>
+    </div>
+  </div>
+
+  <!-- 카운트다운 화면 -->
+  <div id="countdownScreen" class="countdown-screen">
+    <div id="countdownNum" class="countdown-num">3</div>
+    <div class="countdown-sub">두근두근... 💓</div>
+  </div>
+
+  <!-- 결과 화면 -->
+  <div id="resultScreen" class="result-screen container">
+    <div id="revealStatus" class="reveal-status">자리 공개 중...</div>
+
+    <div class="desk-label">🎓 교탁</div>
+
+    <div class="seating-card">
+      <div id="seatingChart" class="seating-chart"></div>
+
+      <div class="stats">
+        <div class="stat-item">
+          <div class="stat-label">총 배치 인원</div>
+          <div class="stat-value"><span id="statTotal">0</span><span class="stat-unit">명</span></div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">분단 수</div>
+          <div class="stat-value"><span id="statSections">0</span><span class="stat-unit">개</span></div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">총 줄 수</div>
+          <div class="stat-value"><span id="statRows">0</span><span class="stat-unit">줄</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="result-actions">
+      <button id="skipBtn" class="btn-big btn-skip" onclick="skipReveal()">⏩ 바로 공개</button>
+      <button id="rerollBtn" class="btn-big btn-reroll hidden" onclick="startGeneration()">🔁 한 번 더!</button>
+      <button id="backBtn" class="btn-big btn-back hidden" onclick="resetAll()">⚙️ 설정으로</button>
+    </div>
+  </div>
+
+  <script>
+    let hasPairs = true;
+    let excludedNumbers = [];
+    let fixedPositions = [{ studentNum: '', row: '' }];
+    let singleSeatOption = 'random';
+    let seatingChart = [];
+
+    // ===== 효과음 =====
+    let audioCtx = null;
+    let soundOn = true;
+
+    function getAudio() {
+      if (!soundOn) return null;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return audioCtx;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function beep(freq, dur = 0.08, type = 'square', vol = 0.05, delay = 0) {
+      const ctx = getAudio();
+      if (!ctx) return;
+      const t = ctx.currentTime + delay;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(vol, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
+    }
+
+    function fanfare() {
+      [523, 659, 784, 1047, 784, 1047].forEach((f, i) => beep(f, 0.22, 'triangle', 0.08, i * 0.11));
+    }
+
+    function toggleSound() {
+      soundOn = !soundOn;
+      document.getElementById('soundBtn').textContent = soundOn ? '🔊' : '🔇';
+    }
+
+    // ===== 설정 화면 =====
+    function togglePairs() {
+      hasPairs = !hasPairs;
+      const toggle = document.getElementById('pairToggle');
+      if (hasPairs) {
+        toggle.classList.add('active');
+      } else {
+        toggle.classList.remove('active');
+      }
+      updateValidation();
+    }
+
+    document.getElementById('excludeInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        const num = parseInt(this.value.trim());
+        const totalStudents = parseInt(document.getElementById('totalStudents').value) || 0;
+        if (!isNaN(num) && num > 0 && num <= totalStudents && !excludedNumbers.includes(num)) {
+          excludedNumbers.push(num);
+          excludedNumbers.sort((a, b) => a - b);
+          this.value = '';
+          renderExcludedTags();
+          updateValidation();
+        }
+      }
+    });
+
+    function renderExcludedTags() {
+      const container = document.getElementById('excludedTags');
+      container.innerHTML = '';
+      excludedNumbers.forEach(num => {
+        const tag = document.createElement('div');
+        tag.className = 'tag';
+        tag.innerHTML = `${num}<button onclick="removeExcludedNumber(${num})">✕</button>`;
+        container.appendChild(tag);
+      });
+    }
+
+    function removeExcludedNumber(num) {
+      excludedNumbers = excludedNumbers.filter(n => n !== num);
+      renderExcludedTags();
+      updateValidation();
+    }
+
+    function addFixedPosition() {
+      fixedPositions.push({ studentNum: '', row: '' });
+      renderFixedPositions();
+    }
+
+    function renderFixedPositions() {
+      const container = document.getElementById('fixedPositionsList');
+      container.innerHTML = '';
+      fixedPositions.forEach((fp, index) => {
+        const row = document.createElement('div');
+        row.className = 'fixed-position-row';
+        row.innerHTML = `
+          <input type="number" placeholder="학생 번호" value="${fp.studentNum}"
+                 onchange="updateFixedPosition(${index}, 'studentNum', this.value)">
+          <span class="arrow">→</span>
+          <input type="number" placeholder="줄 번호" value="${fp.row}"
+                 onchange="updateFixedPosition(${index}, 'row', this.value)">
+          <button class="btn-delete" onclick="removeFixedPosition(${index})">삭제</button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function updateFixedPosition(index, field, value) {
+      fixedPositions[index][field] = value;
+    }
+
+    function removeFixedPosition(index) {
+      fixedPositions.splice(index, 1);
+      renderFixedPositions();
+    }
+
+    function updateValidation() {
+      const totalStudents = parseInt(document.getElementById('totalStudents').value) || 0;
+      const numSections = parseInt(document.getElementById('numSections').value) || 1;
+      const rowsPerSection = parseInt(document.getElementById('rowsPerSection').value) || 1;
+
+      const seatsPerRow = hasPairs ? numSections * 2 : numSections;
+      const totalSeats = rowsPerSection * seatsPerRow;
+      const activeStudents = totalStudents - excludedNumbers.length;
+
+      const alert = document.getElementById('seatAlert');
+      const alertText = document.getElementById('alertText');
+      const generateBtn = document.getElementById('generateBtn');
+      const oddOption = document.getElementById('oddStudentOption');
+
+      if (activeStudents > totalSeats) {
+        alert.classList.remove('hidden');
+        alertText.textContent = `자리가 부족합니다! (학생 ${activeStudents}명 > 좌석 ${totalSeats}개)`;
+        generateBtn.disabled = true;
+      } else {
+        alert.classList.add('hidden');
+        generateBtn.disabled = false;
+      }
+
+      if (hasPairs && activeStudents % 2 === 1 && activeStudents <= totalSeats) {
+        oddOption.classList.remove('hidden');
+        renderSingleSeatButtons();
+      } else {
+        oddOption.classList.add('hidden');
+      }
+    }
+
+    function renderSingleSeatButtons() {
+      const container = document.getElementById('singleSeatButtons');
+      const numSections = parseInt(document.getElementById('numSections').value) || 1;
+      container.innerHTML = '';
+
+      const randomBtn = document.createElement('button');
+      randomBtn.className = `btn btn-secondary ${singleSeatOption === 'random' ? 'active' : ''}`;
+      randomBtn.textContent = '🎲 랜덤 분단';
+      randomBtn.onclick = () => {
+        singleSeatOption = 'random';
+        renderSingleSeatButtons();
+      };
+      container.appendChild(randomBtn);
+
+      for (let i = 0; i < numSections; i++) {
+        const btn = document.createElement('button');
+        btn.className = `btn btn-secondary ${singleSeatOption === i.toString() ? 'active' : ''}`;
+        btn.textContent = `${i + 1}분단`;
+        btn.onclick = () => {
+          singleSeatOption = i.toString();
+          renderSingleSeatButtons();
+        };
+        container.appendChild(btn);
+      }
+    }
+
+    document.getElementById('totalStudents').addEventListener('input', updateValidation);
+    document.getElementById('numSections').addEventListener('input', () => {
+      updateValidation();
+      renderSingleSeatButtons();
+    });
+    document.getElementById('rowsPerSection').addEventListener('input', updateValidation);
+
+    // ===== 뽑기 진행 =====
+    let revealTimers = [];
+    let spinInterval = null;
+
+    function clearReveal() {
+      revealTimers.forEach(clearTimeout);
+      revealTimers = [];
+      if (spinInterval) {
+        clearInterval(spinInterval);
+        spinInterval = null;
+      }
+    }
+
+    function popText(el, text) {
+      el.textContent = text;
+      el.classList.remove('pop');
+      void el.offsetWidth;
+      el.classList.add('pop');
+    }
+
+    // 카운트다운 → 배치 생성 → 공개 연출
+    function startGeneration() {
+      clearReveal();
+      stopConfetti();
+      getAudio();
+
+      document.getElementById('setupScreen').style.display = 'none';
+      document.getElementById('resultScreen').classList.remove('active');
+      const cd = document.getElementById('countdownScreen');
+      const numEl = document.getElementById('countdownNum');
+      cd.classList.add('active');
+
+      const seq = ['3', '2', '1'];
+      let i = 0;
+      const step = () => {
+        if (i < seq.length) {
+          popText(numEl, seq[i]);
+          beep(440, 0.12, 'square', 0.06);
+          i++;
+          revealTimers.push(setTimeout(step, 750));
+        } else {
+          popText(numEl, 'GO!');
+          beep(880, 0.3, 'square', 0.07);
+          revealTimers.push(setTimeout(() => {
+            cd.classList.remove('active');
+            generateSeating();
+            document.getElementById('resultScreen').classList.add('active');
+            window.scrollTo(0, 0);
+            startReveal();
+          }, 600));
+        }
+      };
+      step();
+    }
+
+    // 모든 자리가 슬롯머신처럼 돌다가 하나씩 공개
+    function startReveal() {
+      const seats = Array.from(document.querySelectorAll('.seat.spinning'));
+      const pool = seats.map(s => s.dataset.num);
+      const status = document.getElementById('revealStatus');
+      const n = seats.length;
+
+      document.getElementById('skipBtn').classList.remove('hidden');
+      document.getElementById('rerollBtn').classList.add('hidden');
+      document.getElementById('backBtn').classList.add('hidden');
+      document.querySelector('.stats').classList.remove('show');
+      status.classList.remove('hot');
+      status.textContent = '🎰 자리 섞는 중...';
+
+      spinInterval = setInterval(() => {
+        document.querySelectorAll('.seat.spinning').forEach(s => {
+          s.textContent = pool[Math.floor(Math.random() * pool.length)];
+        });
+      }, 70);
+
+      if (n === 0) {
+        finishReveal();
+        return;
+      }
+
+      const order = shuffleArray(seats);
+      const gap = Math.max(80, Math.min(200, 4000 / n));
+      let t = 1000;
+
+      order.forEach((seat, idx) => {
+        const left = n - idx; // 이 자리를 포함해 남은 자리 수
+        t += (left <= 3 && n > 5) ? 750 : gap;
+        revealTimers.push(setTimeout(() => {
+          revealSeat(seat);
+          beep(500 + (idx / n) * 700, 0.07, 'triangle', 0.06);
+          const remain = n - idx - 1;
+          if (remain === 0) {
+            finishReveal();
+          } else if (remain <= 3 && n > 5) {
+            status.classList.add('hot');
+            status.textContent = `🔥 마지막 ${remain}자리!`;
+          } else {
+            status.textContent = `자리 공개 중... ${idx + 1} / ${n}`;
+          }
+        }, t));
+      });
+    }
+
+    function revealSeat(seat) {
+      seat.classList.remove('spinning');
+      seat.classList.add('revealed');
+      seat.textContent = seat.dataset.num;
+    }
+
+    function finishReveal() {
+      clearReveal();
+      const status = document.getElementById('revealStatus');
+      status.classList.remove('hot');
+      status.textContent = '🎉 자리 배치 완료!';
+      document.getElementById('skipBtn').classList.add('hidden');
+      document.getElementById('rerollBtn').classList.remove('hidden');
+      document.getElementById('backBtn').classList.remove('hidden');
+      document.querySelector('.stats').classList.add('show');
+      fanfare();
+      launchConfetti();
+    }
+
+    function skipReveal() {
+      clearReveal();
+      document.querySelectorAll('.seat.spinning').forEach(revealSeat);
+      finishReveal();
+    }
+
+    // ===== 꽃가루 =====
+    let confettiRAF = null;
+
+    function launchConfetti() {
+      const c = document.getElementById('confetti');
+      const ctx = c.getContext('2d');
+      c.width = window.innerWidth;
+      c.height = window.innerHeight;
+      const colors = ['#22d3ee', '#8b5cf6', '#f472b6', '#facc15', '#a3e635'];
+      const parts = Array.from({ length: 180 }, () => ({
+        x: Math.random() * c.width,
+        y: -20 - Math.random() * c.height * 0.6,
+        w: 6 + Math.random() * 6,
+        h: 10 + Math.random() * 8,
+        vx: -2 + Math.random() * 4,
+        vy: 2 + Math.random() * 4,
+        r: Math.random() * Math.PI,
+        vr: -0.2 + Math.random() * 0.4,
+        color: colors[Math.floor(Math.random() * colors.length)]
+      }));
+      const start = performance.now();
+      cancelAnimationFrame(confettiRAF);
+
+      function frame(now) {
+        ctx.clearRect(0, 0, c.width, c.height);
+        parts.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.04;
+          p.r += p.vr;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.r);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          ctx.restore();
+        });
+        if (now - start < 4500) {
+          confettiRAF = requestAnimationFrame(frame);
+        } else {
+          ctx.clearRect(0, 0, c.width, c.height);
+        }
+      }
+      confettiRAF = requestAnimationFrame(frame);
+    }
+
+    function stopConfetti() {
+      cancelAnimationFrame(confettiRAF);
+      const c = document.getElementById('confetti');
+      c.getContext('2d').clearRect(0, 0, c.width, c.height);
+    }
+
+    // ===== 배치 로직 (기능 동일) =====
+    function shuffleArray(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function generateSeating() {
+      const totalStudents = parseInt(document.getElementById('totalStudents').value) || 0;
+      const numSections = parseInt(document.getElementById('numSections').value) || 1;
+      const rowsPerSection = parseInt(document.getElementById('rowsPerSection').value) || 1;
+      const seatsInSection = hasPairs ? 2 : 1;
+
+      const students = [];
+      for (let i = 1; i <= totalStudents; i++) {
+        if (!excludedNumbers.includes(i)) students.push(i);
+      }
+
+      // 고정 배치: 유효한 입력만, 같은 번호 중복 제거
+      const fixed = [];
+      const fixedSet = new Set();
+      fixedPositions.forEach(fp => {
+        const num = parseInt(fp.studentNum);
+        const row = parseInt(fp.row);
+        if (isNaN(num) || isNaN(row)) return;
+        if (!students.includes(num) || fixedSet.has(num)) return;
+        if (row < 1 || row > rowsPerSection) return;
+        fixedSet.add(num);
+        fixed.push({ studentNum: num, row: row });
+      });
+
+      let shuffled = shuffleArray(students.filter(s => !fixedSet.has(s)));
+
+      // 빈 좌석표: chart[줄][분단][자리]
+      const chart = [];
+      for (let r = 0; r < rowsPerSection; r++) {
+        const rowSeats = [];
+        for (let s = 0; s < numSections; s++) {
+          rowSeats.push(new Array(seatsInSection).fill(null));
+        }
+        chart.push(rowSeats);
+      }
+
+      const blocked = new Set();
+      const key = (r, s, k) => `${r}-${s}-${k}`;
+      const isFree = (r, s, k) => chart[r][s][k] === null && !blocked.has(key(r, s, k));
+
+      // 홀수 처리: 맨 뒷줄 선택 분단에 한 명 혼자 앉기
+      if (hasPairs && students.length % 2 === 1 && shuffled.length > 0) {
+        let chosen = singleSeatOption === 'random'
+          ? Math.floor(Math.random() * numSections)
+          : parseInt(singleSeatOption);
+        if (isNaN(chosen) || chosen < 0 || chosen >= numSections) {
+          chosen = Math.floor(Math.random() * numSections);
+        }
+        const lastRow = rowsPerSection - 1;
+        chart[lastRow][chosen][0] = shuffled.pop();
+        blocked.add(key(lastRow, chosen, 1));
+      }
+
+      // 고정 학생: 지정한 줄 안의 빈자리 중 랜덤
+      const leftover = [];
+      shuffleArray(fixed).forEach(f => {
+        const r = f.row - 1;
+        const freeSeats = [];
+        for (let s = 0; s < numSections; s++) {
+          for (let k = 0; k < seatsInSection; k++) {
+            if (isFree(r, s, k)) freeSeats.push([s, k]);
+          }
+        }
+        if (freeSeats.length === 0) {
+          console.warn(`${f.row}줄에 빈자리가 없어 ${f.studentNum}번은 랜덤 배치됩니다.`);
+          leftover.push(f.studentNum);
+          return;
+        }
+        const [s, k] = freeSeats[Math.floor(Math.random() * freeSeats.length)];
+        chart[r][s][k] = f.studentNum;
+      });
+
+      // 나머지 학생: 앞줄부터 빈자리 채우기
+      shuffled = shuffleArray(shuffled.concat(leftover));
+      let idx = 0;
+      for (let r = 0; r < rowsPerSection; r++) {
+        for (let s = 0; s < numSections; s++) {
+          for (let k = 0; k < seatsInSection; k++) {
+            if (idx < shuffled.length && isFree(r, s, k)) {
+              chart[r][s][k] = shuffled[idx++];
+            }
+          }
+        }
+      }
+
+      seatingChart = chart;
+      renderSeatingChart();
+    }
+
+    // 좌석표 그리기 (처음엔 모두 '?' 상태로 돌기 시작)
+    function renderSeatingChart() {
+      const container = document.getElementById('seatingChart');
+      const numSections = parseInt(document.getElementById('numSections').value) || 1;
+      const rowsPerSection = parseInt(document.getElementById('rowsPerSection').value) || 1;
+      container.innerHTML = '';
+
+      seatingChart.forEach((row, rowIndex) => {
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'seating-row';
+
+        const rowNum = document.createElement('div');
+        rowNum.className = 'row-number';
+        rowNum.textContent = `${rowIndex + 1}줄`;
+        rowDiv.appendChild(rowNum);
+
+        row.forEach(section => {
+          const sectionDiv = document.createElement('div');
+          sectionDiv.className = 'section';
+          const isSolo = hasPairs && section.filter(st => st !== null).length === 1;
+
+          section.forEach(student => {
+            const seat = document.createElement('div');
+            if (student) {
+              seat.className = 'seat spinning' + (isSolo ? ' solo' : '');
+              seat.dataset.num = student;
+              seat.textContent = '?';
+            } else {
+              seat.className = 'seat empty';
+            }
+            sectionDiv.appendChild(seat);
+          });
+
+          rowDiv.appendChild(sectionDiv);
+        });
+
+        container.appendChild(rowDiv);
+      });
+
+      const totalPlaced = seatingChart.flat(2).filter(s => s !== null).length;
+      document.getElementById('statTotal').textContent = totalPlaced;
+      document.getElementById('statSections').textContent = numSections;
+      document.getElementById('statRows').textContent = rowsPerSection;
+    }
+
+    // 설정 화면으로 돌아가기
+    function resetAll() {
+      clearReveal();
+      stopConfetti();
+      document.getElementById('countdownScreen').classList.remove('active');
+      document.getElementById('resultScreen').classList.remove('active');
+      document.getElementById('setupScreen').style.display = 'block';
+      seatingChart = [];
+    }
+
+    renderFixedPositions();
+    updateValidation();
+  </script>
+</body>
+</html>
